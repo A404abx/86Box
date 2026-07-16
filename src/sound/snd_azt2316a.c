@@ -164,6 +164,7 @@
 #include <86box/snd_ad1848.h>
 #include <86box/snd_azt2316a.h>
 #include <86box/snd_sb.h>
+#include <86box/modem.h>
 #include <86box/plat_unused.h>
 #include <86box/log.h>
 
@@ -232,6 +233,9 @@ typedef struct azt2316a_t {
     mpu_t   *mpu;
 
     sb_t *sb;
+
+    modem_t *modem;
+    serial_t *modem_uart;
 
     void * log; /* New logging system */
 } azt2316a_t;
@@ -1463,7 +1467,7 @@ azt_init(const device_t *info)
 
     if (azt2316a->type == SB_SUBTYPE_CLONE_AZT1605_0X0C) {
         fn = "azt1605.nvr";
-    } else if (azt2316a->type == SB_SUBTYPE_CLONE_AZT2316A_0X11) {
+    } else if (azt2316a->type == SB_SUBTYPE_CLONE_AZT2316A_0X11 || azt2316a->type == SB_SUBTYPE_CLONE_AZT_WASH_MODEM) {
         fn = "azt2316a.nvr";
     } else if (azt2316a->type == SB_SUBTYPE_CLONE_AZTPR16_0X09) {
         fn = "aztpr16.nvr";
@@ -1492,7 +1496,7 @@ azt_init(const device_t *info)
     }
 
     if (!loaded_from_eeprom) {
-        if ((azt2316a->type == SB_SUBTYPE_CLONE_AZT2316A_0X11) || (azt2316a->type == SB_SUBTYPE_CLONE_AZT2316R_0X12)) {
+        if ((azt2316a->type == SB_SUBTYPE_CLONE_AZT2316A_0X11 || azt2316a->type == SB_SUBTYPE_CLONE_AZT_WASH_MODEM) || (azt2316a->type == SB_SUBTYPE_CLONE_AZT2316R_0X12)) {
             read_eeprom[0]  = 0xee; /* SB Voice mixer value */
             read_eeprom[1]  = 0x00; /* SB Mic mixer value (bits 2-0) */
             read_eeprom[2]  = 0x00; /* SB Record Source */
@@ -1551,7 +1555,7 @@ azt_init(const device_t *info)
         }
     }
 
-    if ((azt2316a->type == SB_SUBTYPE_CLONE_AZT2316A_0X11) || (azt2316a->type == SB_SUBTYPE_CLONE_AZT2316R_0X12)) {
+    if ((azt2316a->type == SB_SUBTYPE_CLONE_AZT2316A_0X11 || azt2316a->type == SB_SUBTYPE_CLONE_AZT_WASH_MODEM) || (azt2316a->type == SB_SUBTYPE_CLONE_AZT2316R_0X12)  ) {
         azt2316a->config_word = read_eeprom[11] | (read_eeprom[12] << 8) | (read_eeprom[13] << 16) | (read_eeprom[14] << 24);
 
         switch (azt2316a->config_word & (3 << 0)) {
@@ -1835,7 +1839,7 @@ azt_init(const device_t *info)
     else
         ad1848_init(&azt2316a->ad1848, device_get_config_int("codec"));
 
-    if (azt2316a->type == SB_SUBTYPE_CLONE_AZT2316A_0X11)
+    if ((azt2316a->type == SB_SUBTYPE_CLONE_AZT2316A_0X11 || azt2316a->type == SB_SUBTYPE_CLONE_AZT_WASH_MODEM) || (azt2316a->type == SB_SUBTYPE_CLONE_AZT2316R_0X12)  )
         ad1848_set_cd_audio_channel(&azt2316a->ad1848, (device_get_config_int("codec") == AD1848_TYPE_CS4248) ? AD1848_AUX1 : AD1848_LINE_IN);
     else if (azt2316a->type == SB_SUBTYPE_CLONE_AZT2316R_0X12)
         ad1848_set_cd_audio_channel(&azt2316a->ad1848, AD1848_LINE_IN);
@@ -1845,7 +1849,7 @@ azt_init(const device_t *info)
     ad1848_setirq(&azt2316a->ad1848, azt2316a->cur_wss_irq);
     ad1848_setdma(&azt2316a->ad1848, azt2316a->cur_wss_dma);
 
-    if ((azt2316a->type == SB_SUBTYPE_CLONE_AZT2316A_0X11) || (azt2316a->type == SB_SUBTYPE_CLONE_AZT2316R_0X12))
+    if ((azt2316a->type == SB_SUBTYPE_CLONE_AZT2316A_0X11 || azt2316a->type == SB_SUBTYPE_CLONE_AZT_WASH_MODEM) || (azt2316a->type == SB_SUBTYPE_CLONE_AZT2316R_0X12)  )
         io_sethandler(azt2316a->cur_addr + 0x0400, 0x0040, azt2316a_config_read, NULL, NULL, azt2316a_config_write, NULL, NULL, azt2316a);
     else if (azt2316a->type == SB_SUBTYPE_CLONE_AZTPR16_0X09)
         io_sethandler(azt2316a->cur_addr + 0x0400, 0x0010, azt1605_config_read, NULL, NULL, aztpr16_config_write, NULL, NULL, azt2316a);
@@ -1889,7 +1893,7 @@ azt_init(const device_t *info)
     sound_add_handler(azt2316a_get_buffer, azt2316a);
     sound_add_handler(azt2316a_get_sbpro_buffer, azt2316a);
 
-    if ((azt2316a->type == SB_SUBTYPE_CLONE_AZT2316A_0X11) || (azt2316a->type == SB_SUBTYPE_CLONE_AZT2316R_0X12)) {
+    if ((azt2316a->type == SB_SUBTYPE_CLONE_AZT2316A_0X11 || azt2316a->type == SB_SUBTYPE_CLONE_AZT_WASH_MODEM) || (azt2316a->type == SB_SUBTYPE_CLONE_AZT2316R_0X12)  ) {
         if (azt2316a->sb->opl_enabled)
             music_add_handler(sb_get_music_buffer_sbpro, azt2316a->sb);
     }
@@ -1917,7 +1921,7 @@ azt_init(const device_t *info)
         midi_in_handler(1, sb_dsp_input_msg, sb_dsp_input_sysex, &azt2316a->sb->dsp);
 
     /* Restore SBPro mixer settings from EEPROM on AZT2316A cards */
-    if ((azt2316a->type == SB_SUBTYPE_CLONE_AZT2316A_0X11) || (azt2316a->type == SB_SUBTYPE_CLONE_AZT2316R_0X12)) {
+    if ((azt2316a->type == SB_SUBTYPE_CLONE_AZT2316A_0X11 || azt2316a->type == SB_SUBTYPE_CLONE_AZT_WASH_MODEM) || (azt2316a->type == SB_SUBTYPE_CLONE_AZT2316R_0X12)  ) {
         azt2316a->sb->mixer_sbpro.regs[0x04] = read_eeprom[0]; /* SBPro Voice */
         azt2316a->sb->mixer_sbpro.regs[0x0a] = read_eeprom[1]; /* SBPro Mic */
         azt2316a->sb->mixer_sbpro.regs[0x0c] = read_eeprom[2]; /* SBPro Record Source */
@@ -2028,10 +2032,10 @@ azt_init(const device_t *info)
     azt2316a->gameport = gameport_add(&gameport_pnp_device);
     gameport_remap(azt2316a->gameport, (azt2316a->gameport_enabled) ? 0x200: 0x00);
 
-    if ((azt2316a->type == SB_SUBTYPE_CLONE_AZT2316R_0X12) || (azt2316a->type == SB_SUBTYPE_CLONE_AZT2316A_0X11)) {
+    if ((azt2316a->type == SB_SUBTYPE_CLONE_AZT2316R_0X12) || (azt2316a->type == SB_SUBTYPE_CLONE_AZT2316A_0X11 || azt2316a->type == SB_SUBTYPE_CLONE_AZT_WASH_MODEM)) {
         /* Card possibly inits the CS4231 WSS codec in MODE2 at power-on */
         /* Windows 98 and 2000 WDM drivers expect to be able to write to MODE2 registers without setting I12 bit 6 */
-        if ((azt2316a->type == SB_SUBTYPE_CLONE_AZT2316R_0X12) || ((azt2316a->type == SB_SUBTYPE_CLONE_AZT2316A_0X11) && (device_get_config_int("codec") == AD1848_TYPE_CS4231)))
+        if ((azt2316a->type == SB_SUBTYPE_CLONE_AZT2316R_0X12) || (((azt2316a->type == SB_SUBTYPE_CLONE_AZT2316A_0X11 || azt2316a->type == SB_SUBTYPE_CLONE_AZT_WASH_MODEM)) && (device_get_config_int("codec") == AD1848_TYPE_CS4231)))
             azt2316a->ad1848.regs[12] |= 0x40;
         /* WDM drivers also expect reading port WSSBase+1 without writing an index value to return 0xFF */
         azt2316a->ad1848.regs[0] = 0xff;
@@ -2050,7 +2054,7 @@ azt_close(void *priv)
 
     if (azt2316a->type == SB_SUBTYPE_CLONE_AZT1605_0X0C) {
         fn = "azt1605.nvr";
-    } else if (azt2316a->type == SB_SUBTYPE_CLONE_AZT2316A_0X11) {
+    } else if (azt2316a->type == SB_SUBTYPE_CLONE_AZT2316A_0X11 || azt2316a->type == SB_SUBTYPE_CLONE_AZT_WASH_MODEM) {
         fn = "azt2316a.nvr";
     } else if (azt2316a->type == SB_SUBTYPE_CLONE_AZTPR16_0X09) {
         fn = "aztpr16.nvr";
@@ -2482,6 +2486,286 @@ const device_t azt1605_device = {
     .force_redraw  = NULL,
     .alias         = "Clinton",
     .config        = azt1605_config
+};
+
+static void *
+azt_wash_modem_init(const device_t *info)
+{
+    azt2316a_t *azt2316a = azt_init(info);
+    const char *phonebook_file = NULL;
+
+    int port = device_get_config_int("modem_port"); // 0-7 for COM1-COM8
+    uint16_t base = device_get_config_hex16("modem_base");
+    uint8_t irq = device_get_config_int("modem_irq");
+
+    /* Ensure the port is enabled in the serial core. */
+    com_ports[port].enabled = 1;
+
+    /* Add a UART instance for the modem. */
+    /* Note: Rockewell R6674-16 is a 14.4kbps modem controller, usually 16550 compatible interface */
+    azt2316a->modem_uart = device_add_inst(&ns16550_device, port + 1);
+    serial_setup(azt2316a->modem_uart, base, irq);
+
+    /* Initialize modem logic. */
+    azt2316a->modem = (modem_t *) calloc(1, sizeof(modem_t));
+    memset(azt2316a->modem->mac, 0xfc, 6);
+    azt2316a->modem->baudrate = device_get_config_int("modem_baudrate");
+    azt2316a->modem->listen_port = device_get_config_int("modem_listen_port");
+    azt2316a->modem->telnet_mode = device_get_config_int("modem_telnet_mode");
+
+    modem_init_common(azt2316a->modem);
+
+    /* Attach modem logic to our internal UART. */
+    azt2316a->modem->serial = serial_attach_ex_2(port, modem_rcr_cb, modem_write, modem_dtr_callback, azt2316a->modem);
+
+    modem_reset(azt2316a->modem);
+    azt2316a->modem->card = network_attach(azt2316a->modem, azt2316a->modem->mac, modem_rx, NULL);
+
+    phonebook_file = device_get_config_string("modem_phonebook_file");
+    if (phonebook_file && phonebook_file[0] != 0) {
+        modem_read_phonebook_file(azt2316a->modem, phonebook_file);
+    }
+
+    return azt2316a;
+}
+
+static void
+azt_wash_modem_close(void *priv)
+{
+    azt2316a_t *azt2316a = (azt2316a_t *) priv;
+    if (azt2316a->modem) {
+        modem_close_common(azt2316a->modem);
+        netcard_close(azt2316a->modem->card);
+        free(azt2316a->modem);
+    }
+    azt_close(priv);
+}
+
+static const device_config_t azt_wash_modem_config[] = {
+    {
+        .name           = "codec",
+        .description    = "Codec",
+        .type           = CONFIG_SELECTION,
+        .default_string = NULL,
+        .default_int    = AD1848_TYPE_CS4248,
+        .file_filter    = NULL,
+        .spinner        = { 0 },
+        .selection      = {
+            { .description = "CS4248", .value = AD1848_TYPE_CS4248 },
+            { .description = "CS4231", .value = AD1848_TYPE_CS4231 },
+            { .description = ""                                    }
+        },
+        .bios           = { { 0 } }
+    },
+    {
+        .name           = "addr",
+        .description    = "SB Address",
+        .type           = CONFIG_HEX16,
+        .default_string = NULL,
+        .default_int    = 0,
+        .file_filter    = NULL,
+        .spinner        = { 0 },
+        .selection      = {
+            { .description = "0x220",              .value = 0x220 },
+            { .description = "0x240",              .value = 0x240 },
+            { .description = "Use EEPROM setting", .value =     0 },
+            { .description = ""                                   }
+        },
+        .bios           = { { 0 } }
+    },
+    {
+        .name           = "wss_irq",
+        .description    = "WSS IRQ",
+        .type           = CONFIG_SELECTION,
+        .default_string = NULL,
+        .default_int    = 10,
+        .file_filter    = NULL,
+        .spinner        = { 0 },
+        .selection      = {
+            { .description = "IRQ 11", .value = 11 },
+            { .description = "IRQ 10", .value = 10 },
+            { .description = "IRQ 7",  .value =  7 },
+            { .description = ""                    }
+        },
+        .bios           = { { 0 } }
+    },
+    {
+        .name           = "wss_dma",
+        .description    = "WSS DMA",
+        .type           = CONFIG_SELECTION,
+        .default_string = NULL,
+        .default_int    = 0,
+        .file_filter    = NULL,
+        .spinner        = { 0 },
+        .selection      = {
+            { .description = "DMA 0", .value = 0 },
+            { .description = "DMA 1", .value = 1 },
+            { .description = "DMA 3", .value = 3 },
+            { .description = ""                  }
+        },
+        .bios           = { { 0 } }
+    },
+    {
+        .name           = "opl",
+        .description    = "Enable OPL",
+        .type           = CONFIG_BINARY,
+        .default_string = NULL,
+        .default_int    = 1,
+        .file_filter    = NULL,
+        .spinner        = { 0 },
+        .selection      = { { 0 } },
+        .bios           = { { 0 } }
+    },
+    {
+        .name           = "receive_input",
+        .description    = "Receive MIDI input",
+        .type           = CONFIG_BINARY,
+        .default_string = NULL,
+        .default_int    = 1,
+        .file_filter    = NULL,
+        .spinner        = { 0 },
+        .selection      = { { 0 } },
+        .bios           = { { 0 } }
+    },
+    {
+        .name           = "receive_input401",
+        .description    = "Receive MIDI input (MPU-401)",
+        .type           = CONFIG_BINARY,
+        .default_string = NULL,
+        .default_int    = 0,
+        .file_filter    = NULL,
+        .spinner        = { 0 },
+        .selection      = { { 0 } },
+        .bios           = { { 0 } }
+    },
+    /* Modem settings */
+    {
+        .name           = "modem_port",
+        .description    = "Modem COM Port Index",
+        .type           = CONFIG_SELECTION,
+        .default_string = NULL,
+        .default_int    = 1, /* Default to COM2 */
+        .file_filter    = NULL,
+        .spinner        = { 0 },
+        .selection      = {
+            { .description = "COM1", .value = 0 },
+            { .description = "COM2", .value = 1 },
+            { .description = "COM3", .value = 2 },
+            { .description = "COM4", .value = 3 },
+            { .description = "COM5", .value = 4 },
+            { .description = "COM6", .value = 5 },
+            { .description = "COM7", .value = 6 },
+            { .description = "COM8", .value = 7 },
+            { .description = ""                 }
+        },
+        .bios           = { { 0 } }
+    },
+    {
+        .name           = "modem_base",
+        .description    = "Modem Base Address",
+        .type           = CONFIG_HEX16,
+        .default_string = NULL,
+        .default_int    = 0x2f8,
+        .file_filter    = NULL,
+        .spinner        = { 0 },
+        .selection      = {
+            { .description = "0x3f8", .value = 0x3f8 },
+            { .description = "0x2f8", .value = 0x2f8 },
+            { .description = "0x3e8", .value = 0x3e8 },
+            { .description = "0x2e8", .value = 0x2e8 },
+            { .description = ""                      }
+        },
+        .bios           = { { 0 } }
+    },
+    {
+        .name           = "modem_irq",
+        .description    = "Modem IRQ",
+        .type           = CONFIG_SELECTION,
+        .default_string = NULL,
+        .default_int    = 3,
+        .file_filter    = NULL,
+        .spinner        = { 0 },
+        .selection      = {
+            { .description = "IRQ 3", .value = 3 },
+            { .description = "IRQ 4", .value = 4 },
+            { .description = "IRQ 5", .value = 5 },
+            { .description = "IRQ 7", .value = 7 },
+            { .description = ""                  }
+        },
+        .bios           = { { 0 } }
+    },
+    {
+        .name           = "modem_baudrate",
+        .description    = "Modem Baud Rate",
+        .type           = CONFIG_SELECTION,
+        .default_string = NULL,
+        .default_int    = 115200,
+        .file_filter    = NULL,
+        .spinner        = { 0 },
+        .selection      = {
+            { .description = "115200", .value = 115200 },
+            { .description =  "57600", .value =  57600 },
+            { .description =  "38400", .value =  38400 },
+            { .description =  "19200", .value =  19200 },
+            { .description =   "9600", .value =   9600 },
+            { .description =   "2400", .value =   2400 },
+            { .description =   "1200", .value =   1200 },
+            { .description =    "300", .value =    300 },
+            { .description = ""                        }
+        },
+        .bios           = { { 0 } }
+    },
+    {
+        .name           = "modem_listen_port",
+        .description    = "Modem TCP/IP listening port",
+        .type           = CONFIG_SPINNER,
+        .default_string = NULL,
+        .default_int    = 0,
+        .file_filter    = NULL,
+        .spinner        = {
+            .min =     0,
+            .max = 32767
+        },
+        .selection      = { { 0 } },
+        .bios           = { { 0 } }
+    },
+    {
+        .name           = "modem_phonebook_file",
+        .description    = "Modem Phonebook File",
+        .type           = CONFIG_FNAME,
+        .default_string = NULL,
+        .file_filter    = "Text files (*.txt)|*.txt",
+        .spinner        = { 0 },
+        .selection      = { { 0 } },
+        .bios           = { { 0 } }
+    },
+    {
+        .name           = "modem_telnet_mode",
+        .description    = "Modem Telnet emulation",
+        .type           = CONFIG_BINARY,
+        .default_string = NULL,
+        .default_int    = 0,
+        .file_filter    = NULL,
+        .spinner        = { 0 },
+        .selection      = { { 0 } },
+        .bios           = { { 0 } }
+    },
+    { .name = "", .description = "", .type = CONFIG_END }
+};
+
+const device_t azt_wash_modem_device = {
+    .name          = "Aztech Sound Galaxy Washington 16 (Modem)",
+    .internal_name = "azt_wash_modem",
+    .flags         = DEVICE_ISA16,
+    .local         = SB_SUBTYPE_CLONE_AZT_WASH_MODEM,
+    .init          = azt_wash_modem_init,
+    .close         = azt_wash_modem_close,
+    .reset         = NULL,
+    .available     = NULL,
+    .speed_changed = azt_speed_changed,
+    .force_redraw  = NULL,
+    .alias         = "Washington Modem",
+    .config        = azt_wash_modem_config
 };
 
 const device_t aztpr16_device = {

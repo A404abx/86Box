@@ -126,7 +126,9 @@ serial_transmit_period(serial_t *dev)
 void
 serial_do_irq(serial_t *dev, int set)
 {
-    if (dev->irq != 0xff) {
+    if (dev->sd && dev->sd->irq_callback) {
+        dev->sd->irq_callback(dev, dev->sd->priv, set);
+    } else if (dev->irq != 0xff) {
         if (set || (dev->irq_state != !!set))
             picint_common(1 << dev->irq, !!(dev->type >= SERIAL_16450), set, &dev->irq_state);
         if (dev->type < SERIAL_16450)
@@ -924,6 +926,34 @@ serial_attach_ex_2(int port,
     return com_ports[port].serial;
 }
 
+serial_t *
+serial_attach_ex_3(int port,
+                   void (*rcr_callback)(struct serial_s *serial, void *priv),
+                   void (*dev_write)(struct serial_s *serial, void *priv, uint8_t data),
+                   void (*dtr_callback)(struct serial_s *serial, int status, void *priv),
+                   void (*irq_callback)(struct serial_s *serial, void *priv, int set),
+                   void *priv)
+{
+    /* Make sure this port becomes non-hotunpluggable if a hotunpluggable dropdown
+       device and a non-hotunpluggable external device are both trying to claim it. */
+    uint8_t hotunplug         = com_ports[port].hotunplug;
+    com_ports[port].hotunplug = CHAR_PORT_NOHOTUNPLUG;
+    if (hotunplug != CHAR_PORT_DETACHED)
+        return NULL;
+
+    serial_device_t *sd = &serial_devices[port];
+
+    sd->rcr_callback             = rcr_callback;
+    sd->dtr_callback             = dtr_callback;
+    sd->dev_write                = dev_write;
+    sd->irq_callback             = irq_callback;
+    sd->transmit_period_callback = NULL;
+    sd->lcr_callback             = NULL;
+    sd->priv                     = priv;
+
+    return com_ports[port].serial;
+}
+
 void
 serial_devices_init(void)
 {
@@ -1043,9 +1073,12 @@ serial_init(const device_t *info)
 {
     serial_t *dev = (serial_t *) calloc(1, sizeof(serial_t));
     int orig_inst = next_inst;
+    int inst = device_get_instance();
 
     if (info->local & 0xFFF00000)
         next_inst = SERIAL_MAX - 1;
+    else if (inst > 0)
+        next_inst = inst - 1;
 
     dev->inst = next_inst;
 
@@ -1112,8 +1145,10 @@ serial_init(const device_t *info)
         serial_reset_port(dev);
     }
 
-    if (!(info->local & 0xfff00000))
+    if (!(info->local & 0xfff00000) && (inst <= 0))
         next_inst++;
+    else
+        next_inst = orig_inst;
 
     return dev;
 }

@@ -177,6 +177,7 @@ extern const device_t ad1816_device;
 
 /* Aztech Sound Galaxy 16 */
 extern const device_t azt2316a_device;
+extern const device_t azt_wash_modem_device;
 extern const device_t azt1605_device;
 extern const device_t aztpr16_device;
 extern const device_t azt2316r_device;

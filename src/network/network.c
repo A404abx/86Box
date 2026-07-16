@@ -98,6 +98,7 @@ static const NETWORK_CARD net_cards[] = {
     { &wd8003e_device             },
     { &wd8003eb_device            },
     { &wd8013ebt_device           },
+    { &isa_modem_device           },
     /* COM */
     { &modem_device               },
     /* LPT */
@@ -124,6 +125,13 @@ static const NETWORK_CARD net_cards[] = {
     { &rtl8029as_device           },
     { &rtl8139c_plus_device       },
     { &smc_epic100_device         },
+    { &pci_modem_device           },
+    { &cis_ws5614_device          },
+    { &cis_ws5614_hsf_device      },
+    { &cis_ws5614_voice_device    },
+    { &wisecom_pm3_device         },
+    { &wisecom_pm3d_device        },
+    { &conexant_hsf_device        },
     { NULL                        }
     // clang-format on
 };

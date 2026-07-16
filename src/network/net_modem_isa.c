@@ -6,15 +6,11 @@
  *
  *          This file is part of the 86Box distribution.
  *
- *          Hayes AT-compliant modem emulation (COM port wrapper).
+ *          Internal ISA Modem emulation.
  *
- * Authors: Cacodemon345
- *          The DOSBox Team
- *          (Refactored by Arena AI)
+ * Authors: Arena AI
  *
- *          Copyright 2024 Cacodemon345
- *          Copyright (C) 2022       The DOSBox Staging Team
- *          Copyright (C) 2002-2021  The DOSBox Team
+ *          Copyright 2024 Arena AI.
  */
 #include <stdarg.h>
 #include <stdio.h>
@@ -31,53 +27,73 @@
 #include <86box/network.h>
 #include <86box/modem.h>
 
+typedef struct isa_modem_s {
+    modem_t *modem;
+    serial_t *serial;
+    int port_index;
+} isa_modem_t;
+
 extern void modem_read_phonebook_file(modem_t *modem, const char *path);
 
-/* Initialize the device for use by the user. */
 static void *
-modem_init(UNUSED(const device_t *info))
+isa_modem_init(const device_t *info)
 {
-    modem_t    *modem          = (modem_t *) calloc(1, sizeof(modem_t));
+    isa_modem_t *dev = (isa_modem_t *) calloc(1, sizeof(isa_modem_t));
     const char *phonebook_file = NULL;
-    memset(modem->mac, 0xfc, 6);
 
-    modem->port        = device_get_config_int("port");
-    modem->baudrate    = device_get_config_int("baudrate");
-    modem->listen_port = device_get_config_int("listen_port");
-    modem->telnet_mode = device_get_config_int("telnet_mode");
+    int port = device_get_config_int("port"); // 0-7 for COM1-COM8
+    uint16_t base = device_get_config_hex16("base");
+    uint8_t irq = device_get_config_int("irq");
 
-    modem_init_common(modem);
+    dev->port_index = port;
 
-    modem->serial = serial_attach_ex_2(modem->port, modem_rcr_cb, modem_write, modem_dtr_callback, modem);
+    /* Ensure the port is enabled in the serial core. */
+    com_ports[port].enabled = 1;
 
-    modem_reset(modem);
-    modem->card = network_attach(modem, modem->mac, modem_rx, NULL);
+    /* Add a UART instance. */
+    dev->serial = device_add_inst(&ns16550_device, port + 1);
+    serial_setup(dev->serial, base, irq);
+
+    /* Initialize modem logic. */
+    dev->modem = (modem_t *) calloc(1, sizeof(modem_t));
+    memset(dev->modem->mac, 0xfc, 6);
+    dev->modem->baudrate = device_get_config_int("baudrate");
+    dev->modem->listen_port = device_get_config_int("listen_port");
+    dev->modem->telnet_mode = device_get_config_int("telnet_mode");
+
+    modem_init_common(dev->modem);
+
+    /* Attach modem logic to our internal UART. */
+    dev->modem->serial = serial_attach_ex_2(port, modem_rcr_cb, modem_write, modem_dtr_callback, dev->modem);
+
+    modem_reset(dev->modem);
+    dev->modem->card = network_attach(dev->modem, dev->modem->mac, modem_rx, NULL);
 
     phonebook_file = device_get_config_string("phonebook_file");
     if (phonebook_file && phonebook_file[0] != 0) {
-        modem_read_phonebook_file(modem, phonebook_file);
+        modem_read_phonebook_file(dev->modem, phonebook_file);
     }
 
-    return modem;
+    return dev;
 }
 
-void
-modem_close(void *priv)
+static void
+isa_modem_close(void *priv)
 {
-    modem_t *modem = (modem_t *) priv;
-    modem_close_common(modem);
-    netcard_close(modem->card);
-    free(priv);
+    isa_modem_t *dev = (isa_modem_t *) priv;
+    modem_close_common(dev->modem);
+    netcard_close(dev->modem->card);
+    free(dev->modem);
+    free(dev);
 }
 
-// clang-format off
-static const device_config_t modem_config[] = {
+static const device_config_t isa_modem_config[] = {
     {
         .name           = "port",
-        .description    = "Serial Port",
+        .description    = "COM Port Index",
         .type           = CONFIG_SELECTION,
         .default_string = NULL,
-        .default_int    = 0,
+        .default_int    = 2, /* Default to COM3 */
         .file_filter    = NULL,
         .spinner        = { 0 },
         .selection      = {
@@ -85,7 +101,54 @@ static const device_config_t modem_config[] = {
             { .description = "COM2", .value = 1 },
             { .description = "COM3", .value = 2 },
             { .description = "COM4", .value = 3 },
+            { .description = "COM5", .value = 4 },
+            { .description = "COM6", .value = 5 },
+            { .description = "COM7", .value = 6 },
+            { .description = "COM8", .value = 7 },
             { .description = ""                 }
+        },
+        .bios           = { { 0 } }
+    },
+    {
+        .name           = "base",
+        .description    = "Base Address",
+        .type           = CONFIG_HEX16,
+        .default_string = NULL,
+        .default_int    = 0x3e8,
+        .file_filter    = NULL,
+        .spinner        = { 0 },
+        .selection      = {
+            { .description = "0x3f8", .value = 0x3f8 },
+            { .description = "0x2f8", .value = 0x2f8 },
+            { .description = "0x3e8", .value = 0x3e8 },
+            { .description = "0x2e8", .value = 0x2e8 },
+            { .description = "0x3f0", .value = 0x3f0 },
+            { .description = "0x2f0", .value = 0x2f0 },
+            { .description = "0x3e0", .value = 0x3e0 },
+            { .description = "0x2e0", .value = 0x2e0 },
+            { .description = ""                      }
+        },
+        .bios           = { { 0 } }
+    },
+    {
+        .name           = "irq",
+        .description    = "IRQ",
+        .type           = CONFIG_SELECTION,
+        .default_string = NULL,
+        .default_int    = 4,
+        .file_filter    = NULL,
+        .spinner        = { 0 },
+        .selection      = {
+            { .description = "IRQ 3", .value = 3 },
+            { .description = "IRQ 4", .value = 4 },
+            { .description = "IRQ 5", .value = 5 },
+            { .description = "IRQ 7", .value = 7 },
+            { .description = "IRQ 9", .value = 9 },
+            { .description = "IRQ 10", .value = 10 },
+            { .description = "IRQ 11", .value = 11 },
+            { .description = "IRQ 12", .value = 12 },
+            { .description = "IRQ 15", .value = 15 },
+            { .description = ""                  }
         },
         .bios           = { { 0 } }
     },
@@ -155,18 +218,17 @@ static const device_config_t modem_config[] = {
     },
     { .name = "", .description = "", .type = CONFIG_END }
 };
-// clang-format on
 
-const device_t modem_device = {
-    .name          = "Standard Hayes-compliant Modem",
-    .internal_name = "modem",
-    .flags         = DEVICE_COM,
+const device_t isa_modem_device = {
+    .name          = "Internal ISA Modem",
+    .internal_name = "isa_modem",
+    .flags         = DEVICE_ISA,
     .local         = 0,
-    .init          = modem_init,
-    .close         = modem_close,
+    .init          = isa_modem_init,
+    .close         = isa_modem_close,
     .reset         = NULL,
     .available     = NULL,
     .speed_changed = modem_speed_changed,
     .force_redraw  = NULL,
-    .config        = modem_config
+    .config        = isa_modem_config
 };

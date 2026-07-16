@@ -242,6 +242,14 @@ extern const device_t pcnet_am79c973_onboard_device;
 
 /* Modem */
 extern const device_t modem_device;
+extern const device_t isa_modem_device;
+extern const device_t pci_modem_device;
+extern const device_t cis_ws5614_device;
+extern const device_t cis_ws5614_hsf_device;
+extern const device_t cis_ws5614_voice_device;
+extern const device_t wisecom_pm3_device;
+extern const device_t wisecom_pm3d_device;
+extern const device_t conexant_hsf_device;
 
 /* PLIP */
 extern const device_t plip_device;

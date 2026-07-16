@@ -6,6 +6,7 @@
 /*Sound Blaster Clones, for quirks*/
 #define SB_SUBTYPE_DEFAULT             0 /* Handle as a Creative card */
 #define SB_SUBTYPE_CLONE_AZT2316A_0X11 1 /* Aztech Sound Galaxy Pro 16 AB, DSP 3.1 - SBPRO2 clone */
+#define SB_SUBTYPE_CLONE_AZT_WASH_MODEM 2
 #define SB_SUBTYPE_CLONE_AZT1605_0X0C  2 /* Aztech Sound Galaxy Nova 16 Extra /
                                             Packard Bell Forte 16, DSP 2.1 - SBPRO2 clone */
 #define SB_SUBTYPE_CLONE_AZTPR16_0X09  3 /* Aztech Sound Galaxy Pro 16 Extra */

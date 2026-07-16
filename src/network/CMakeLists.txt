@@ -34,6 +34,9 @@ list(APPEND net_sources
     net_rtl8139.c
     net_l80225.c
     net_modem.c
+    net_modem_isa.c
+    net_modem_pci.c
+    modem.c
     utils/getline.c
 )
 
